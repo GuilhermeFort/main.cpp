@@ -25,12 +25,17 @@ const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
 for(const file of layouts){
   let src=fs.readFileSync(file,'utf8');
-  if(src.includes('/investigation-tools.js')){injected=true;continue;}
-  if(src.includes('</body>')){
-    src=src.replace('</body>','<script src="/investigation-tools.js" defer></script></body>');
+  if(src.includes('/investigation-tools.js')){injected=true;}
+  else if(src.includes('</body>')){
+    src=src.replace('</body>','<script src="/investigation-tools.js" defer></script><script src="/investigation-task-patch.js" defer></script></body>');
     fs.writeFileSync(file,src,'utf8');
     console.log('Caderno avançado e painel de evidências ativados em',file);
     injected=true;
+  }
+  if(src.includes('/investigation-tools.js')&&!src.includes('/investigation-task-patch.js')){
+    src=src.replace('<script src="/investigation-tools.js" defer></script>','<script src="/investigation-tools.js" defer></script><script src="/investigation-task-patch.js" defer></script>');
+    fs.writeFileSync(file,src,'utf8');
+    console.log('Fluxo de perícia via Central ativado em',file);
   }
 }
 if(!injected) console.warn('Layout não encontrado para ativar as ferramentas de investigação.');
