@@ -29,8 +29,9 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
   })();
 
   const merged=\`INSTRUÇÕES DE SISTEMA:\n\${systemInstruction}\n\nENTRADA:\n\${input}\`;
-  const models=['gemini-3.6-flash','gemini-3.5-flash'];
+  const models=['gemini-3.6-flash','gemini-3.7-flash','gemini-3.5-flash'];
   let lastMessage='O Gemini não conseguiu responder agora.';
+  let allQuota=true;
 
   for(const model of models){
     const variants:any[]=[
@@ -54,9 +55,11 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
       if(!response.ok){
         lastMessage=data?.error?.message||data?.message||raw||\`Falha do Gemini (\${response.status}).\`;
         if(response.status===429){quotaHit=true;break;}
+        allQuota=false;
         if(response.status===400&&i<variants.length-1) continue;
         throw new Error(lastMessage);
       }
+      allQuota=false;
       if(data?.status==='failed'){
         lastMessage=data?.errors?.map((e:any)=>e.message).filter(Boolean).join('; ')||'A interação do Gemini falhou.';
         if(i<variants.length-1) continue;
@@ -81,6 +84,7 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     }
     if(!quotaHit) break;
   }
+  if(allQuota) throw new Error('Limite temporário do Gemini atingido em todos os modelos disponíveis. Aguarde cerca de 1 minuto e tente novamente.');
   throw new Error(lastMessage);
 }
 
@@ -97,4 +101,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: 3.6 principal, 3.5 fallback em quota.');
+console.log('Gemini Interactions: 3.6 principal, 3.7 e 3.5 fallbacks em quota.');
