@@ -1,19 +1,58 @@
 import type { MysteryCase } from './case';
 type Difficulty='dificil'|'especialista';
-const preferredModels=['gemini-2.5-flash','gemini-2.0-flash'];
+const preferredModels=['gemini-3.6-flash'];
 
-async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,temperature=.7){
+function toJsonSchema(value:any):any{
+  if(Array.isArray(value)) return value.map(toJsonSchema);
+  if(!value||typeof value!=='object') return value;
+  const out:any={};
+  for(const [key,raw] of Object.entries(value)){
+    if(key==='nullable') continue;
+    if(key==='type'){
+      if(Array.isArray(raw)) out.type=raw.map(x=>String(x).toLowerCase());
+      else out.type=String(raw).toLowerCase();
+    }else out[key]=toJsonSchema(raw);
+  }
+  if(value.nullable===true){
+    const current=out.type;
+    out.type=Array.isArray(current)?Array.from(new Set([...current,'null'])):[current||'string','null'];
+  }
+  return out;
+}
+
+async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   let lastError='O Gemini não conseguiu responder agora.';
   for(const model of preferredModels){
-    const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
-      method:'POST',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},signal:AbortSignal.timeout(55000),
-      body:JSON.stringify({systemInstruction:{parts:[{text:systemInstruction}]},contents:[{role:'user',parts:[{text:input}]}],generationConfig:{maxOutputTokens,temperature,responseMimeType:'application/json',...(responseSchema?{responseSchema}:{})}})
+    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+      method:'POST',
+      headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
+      signal:AbortSignal.timeout(55000),
+      body:JSON.stringify({
+        model,
+        input,
+        system_instruction:systemInstruction,
+        store:false,
+        generation_config:{max_output_tokens:maxOutputTokens,thinking_level:'medium',thinking_summaries:'none'},
+        ...(responseSchema?{response_format:{type:'text',mime_type:'application/json',schema:toJsonSchema(responseSchema)}}:{})
+      })
     });
-    if(!response.ok){const detail=await response.json().catch(()=>null) as any;lastError=detail?.error?.message||`Falha do Gemini (${response.status}).`;if(response.status===404||response.status===400)continue;throw new Error(lastError)}
+    if(!response.ok){
+      const detail=await response.json().catch(()=>null) as any;
+      lastError=detail?.error?.message||detail?.message||`Falha do Gemini (${response.status}).`;
+      if(response.status===404||response.status===400)continue;
+      throw new Error(lastError);
+    }
     const data=await response.json() as any;
-    const text=data.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').join('').trim();
+    if(data.status==='failed') throw new Error(data.errors?.map((e:any)=>e.message).filter(Boolean).join('; ')||'A interação do Gemini falhou.');
+    const text=(data.steps||[])
+      .filter((step:any)=>step?.type==='model_output')
+      .flatMap((step:any)=>step.content||[])
+      .filter((part:any)=>part?.type==='text')
+      .map((part:any)=>part.text||'')
+      .join('')
+      .trim();
     if(!text)throw new Error('O Gemini devolveu uma resposta vazia.');
-    try{return JSON.parse(text.replace(/^```json\s*|\s*```$/g,''))}catch{throw new Error('O Gemini não terminou de montar o caso.')}
+    try{return JSON.parse(text.replace(/^```json\s*|\s*```$/g,''))}catch{throw new Error('O Gemini não terminou de montar o JSON esperado.')}
   }
   throw new Error(lastError);
 }
