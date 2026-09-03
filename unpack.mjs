@@ -10,26 +10,16 @@ for (const [file, content] of Object.entries(files)) {
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
-if(fs.existsSync('overrides/gemini.ts')){
-  fs.mkdirSync('lib',{recursive:true});
-  fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
-  console.log('Motor Gemini avançado aplicado.');
-}
-if(fs.existsSync('overrides/learning.ts')){
-  fs.mkdirSync('lib',{recursive:true});
-  fs.copyFileSync('overrides/learning.ts','lib/learning.ts');
-  console.log('Pipeline teacher/student aplicado.');
-}
-if(fs.existsSync('overrides/learning-route.ts')){
-  fs.mkdirSync('app/api/ai-learning',{recursive:true});
-  fs.copyFileSync('overrides/learning-route.ts','app/api/ai-learning/route.ts');
-  console.log('API interna de aprendizado ativada.');
-}
-if(fs.existsSync('overrides/messages-route.ts')){
-  fs.mkdirSync('app/api/messages',{recursive:true});
-  fs.copyFileSync('overrides/messages-route.ts','app/api/messages/route.ts');
-  console.log('Captura automática teacher/student ativada nas conversas.');
-}
+const copies=[
+  ['overrides/supabase.ts','lib/supabase.ts','Adaptador Supabase compatível aplicado.'],
+  ['overrides/gemini.ts','lib/gemini.ts','Motor Gemini avançado aplicado.'],
+  ['overrides/learning.ts','lib/learning.ts','Pipeline teacher/student aplicado.'],
+  ['overrides/psychology.ts','lib/psychology.ts','Psicologia persistente aplicada.'],
+  ['overrides/learning-route.ts','app/api/ai-learning/route.ts','API interna de aprendizado ativada.'],
+  ['overrides/investigation-state-route.ts','app/api/investigation-state/route.ts','API de evidências/timeline/hipóteses ativada.'],
+  ['overrides/messages-route.ts','app/api/messages/route.ts','Memória isolada por personagem e aprendizado automático ativados.']
+];
+for(const [src,dst,msg] of copies){if(fs.existsSync(src)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);console.log(msg)}}
 
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
