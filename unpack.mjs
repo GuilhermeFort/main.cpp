@@ -11,7 +11,6 @@ for (const [file, content] of Object.entries(files)) {
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
 const copies=[
-  ['overrides/supabase.ts','lib/supabase.ts','Adaptador Supabase compatível aplicado.'],
   ['overrides/gemini.ts','lib/gemini.ts','Motor Gemini avançado aplicado.'],
   ['overrides/learning.ts','lib/learning.ts','Pipeline teacher/student aplicado.'],
   ['overrides/psychology.ts','lib/psychology.ts','Psicologia persistente aplicada.'],
