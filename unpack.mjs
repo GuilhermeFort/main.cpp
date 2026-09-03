@@ -26,6 +26,8 @@ if(fs.existsSync('patch-gemini-interactions.mjs')){
   await import(`./patch-gemini-interactions.mjs?ts=${Date.now()}`);
 }
 
+if(fs.existsSync('app/api/gemini-smoke')) fs.rmSync('app/api/gemini-smoke',{recursive:true,force:true});
+
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
 for(const file of layouts){
