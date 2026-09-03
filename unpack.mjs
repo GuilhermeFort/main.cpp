@@ -10,7 +10,11 @@ for (const [file, content] of Object.entries(files)) {
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
-// Aplica módulos mais novos depois de restaurar o bundle original.
+if(fs.existsSync('overrides/supabase.ts')){
+  fs.mkdirSync('lib',{recursive:true});
+  fs.copyFileSync('overrides/supabase.ts','lib/supabase.ts');
+  console.log('Adaptador Supabase compatível aplicado.');
+}
 if(fs.existsSync('overrides/gemini.ts')){
   fs.mkdirSync('lib',{recursive:true});
   fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
@@ -27,7 +31,6 @@ if(fs.existsSync('overrides/learning-route.ts')){
   console.log('API interna de aprendizado ativada.');
 }
 
-// Injeta o caderno avançado/painel de evidências no layout restaurado.
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
 for(const file of layouts){
@@ -41,6 +44,4 @@ for(const file of layouts){
   }
 }
 if(!injected) console.warn('Layout não encontrado para ativar as ferramentas de investigação.');
-
-// Overrides são apenas artefatos de build; não devem entrar no TypeScript do app.
 if(fs.existsSync('overrides')) fs.rmSync('overrides',{recursive:true,force:true});
