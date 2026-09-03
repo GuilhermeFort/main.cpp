@@ -22,6 +22,10 @@ const copies=[
 ];
 for(const [src,dst,msg] of copies){if(fs.existsSync(src)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);console.log(msg)}}
 
+if(fs.existsSync('patch-gemini-interactions.mjs')){
+  await import(`./patch-gemini-interactions.mjs?ts=${Date.now()}`);
+}
+
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
 for(const file of layouts){
