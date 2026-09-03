@@ -10,7 +10,13 @@ for (const [file, content] of Object.entries(files)) {
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
-// Injeta as ferramentas novas sem reescrever o frontend original.
+// Mantém o frontend original, mas substitui o cérebro antigo pela versão nova.
+if(fs.existsSync('overrides/gemini.ts')){
+  fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
+  console.log('Motor Gemini avançado aplicado.');
+}
+
+// Injeta o caderno avançado/painel de evidências no layout restaurado.
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
 let injected=false;
 for(const file of layouts){
