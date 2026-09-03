@@ -13,6 +13,7 @@ console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.
 const copies=[
   ['overrides/gemini.ts','lib/gemini.ts','Motor Gemini avançado aplicado.'],
   ['overrides/learning.ts','lib/learning.ts','Pipeline teacher/student aplicado.'],
+  ['overrides/student.ts','lib/student.ts','Executor shadow da IA própria aplicado.'],
   ['overrides/psychology.ts','lib/psychology.ts','Psicologia persistente aplicada.'],
   ['overrides/learning-route.ts','app/api/ai-learning/route.ts','API interna de aprendizado ativada.'],
   ['overrides/investigation-state-route.ts','app/api/investigation-state/route.ts','API de evidências/timeline/hipóteses ativada.'],
