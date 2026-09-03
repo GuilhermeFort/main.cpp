@@ -20,49 +20,61 @@ const replacement=`function toJsonSchema(value:any):any{
 }
 
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
-  const payload:any={
-    model:'gemini-3.6-flash',
-    input,
-    system_instruction:systemInstruction,
-    store:false,
-    generation_config:{max_output_tokens:maxOutputTokens}
-  };
-  if(responseSchema){
+  const format=(()=>{
+    if(!responseSchema) return undefined;
     const converted=toJsonSchema(responseSchema);
-    const format:any={type:'text',mime_type:'application/json'};
-    if(JSON.stringify(converted).length<3500) format.schema=converted;
-    payload.response_format=format;
-  }
+    const f:any={type:'text',mime_type:'application/json'};
+    if(JSON.stringify(converted).length<3500) f.schema=converted;
+    return f;
+  })();
 
-  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-    method:'POST',
-    headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
-    signal:AbortSignal.timeout(55000),
-    body:JSON.stringify(payload)
-  });
-  const raw=await response.text();
-  let data:any=null;
-  try{data=raw?JSON.parse(raw):null}catch{}
-  if(!response.ok){
-    const message=data?.error?.message||data?.message||raw||\`Falha do Gemini (\${response.status}).\`;
-    throw new Error(message);
+  const merged=\`INSTRUÇÕES DE SISTEMA:\n\${systemInstruction}\n\nENTRADA:\n\${input}\`;
+  const variants:any[]=[
+    {model:'gemini-3.6-flash',input,system_instruction:systemInstruction,store:false,generation_config:{max_output_tokens:maxOutputTokens},...(format?{response_format:format}:{})},
+    {model:'gemini-3.6-flash',input:merged,store:false,generation_config:{max_output_tokens:maxOutputTokens},...(format?{response_format:format}:{})},
+    {model:'gemini-3.6-flash',input:merged,store:false,...(format?{response_format:format}:{})},
+    {model:'gemini-3.6-flash',input:merged+'\\n\\nRetorne SOMENTE um objeto JSON válido, sem markdown.',store:false}
+  ];
+
+  let lastMessage='O Gemini não conseguiu responder agora.';
+  for(let i=0;i<variants.length;i++){
+    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+      method:'POST',
+      headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
+      signal:AbortSignal.timeout(55000),
+      body:JSON.stringify(variants[i])
+    });
+    const raw=await response.text();
+    let data:any=null;
+    try{data=raw?JSON.parse(raw):null}catch{}
+    if(!response.ok){
+      lastMessage=data?.error?.message||data?.message||raw||\`Falha do Gemini (\${response.status}).\`;
+      if(response.status===400&&i<variants.length-1) continue;
+      throw new Error(lastMessage);
+    }
+    if(data?.status==='failed'){
+      lastMessage=data?.errors?.map((e:any)=>e.message).filter(Boolean).join('; ')||'A interação do Gemini falhou.';
+      if(i<variants.length-1) continue;
+      throw new Error(lastMessage);
+    }
+    const text=(typeof data?.output_text==='string'&&data.output_text.trim())
+      ? data.output_text.trim()
+      : (data?.steps||[])
+          .filter((step:any)=>step?.type==='model_output')
+          .flatMap((step:any)=>step.content||[])
+          .filter((part:any)=>part?.type==='text')
+          .map((part:any)=>part.text||'')
+          .join('')
+          .trim();
+    if(!text){lastMessage='O Gemini devolveu uma resposta vazia.';if(i<variants.length-1)continue;throw new Error(lastMessage)}
+    const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
+    try{return JSON.parse(cleaned)}catch{
+      lastMessage='O Gemini respondeu em formato inesperado. A resposta estruturada não pôde ser lida.';
+      if(i<variants.length-1) continue;
+      throw new Error(lastMessage);
+    }
   }
-  if(data?.status==='failed') throw new Error(data?.errors?.map((e:any)=>e.message).filter(Boolean).join('; ')||'A interação do Gemini falhou.');
-  const text=(typeof data?.output_text==='string'&&data.output_text.trim())
-    ? data.output_text.trim()
-    : (data?.steps||[])
-        .filter((step:any)=>step?.type==='model_output')
-        .flatMap((step:any)=>step.content||[])
-        .filter((part:any)=>part?.type==='text')
-        .map((part:any)=>part.text||'')
-        .join('')
-        .trim();
-  if(!text) throw new Error('O Gemini devolveu uma resposta vazia.');
-  const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
-  try{return JSON.parse(cleaned)}catch{
-    console.error('Gemini structured-output parse failure:',cleaned.slice(0,500));
-    throw new Error('O Gemini respondeu em formato inesperado. A resposta estruturada não pôde ser lida.');
-  }
+  throw new Error(lastMessage);
 }
 
 `;
@@ -78,4 +90,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: schema omitido em respostas gigantes; JSON continua obrigatório.');
+console.log('Gemini Interactions: fallbacks resilientes ativados.');
