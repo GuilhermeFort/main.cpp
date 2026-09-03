@@ -19,13 +19,28 @@ const replacement=`function toJsonSchema(value:any):any{
   return out;
 }
 
+function largeJsonShape(){
+  const string={type:'string'};
+  const genericObject={type:'object',properties:{}};
+  return {
+    type:'object',
+    properties:{
+      title:string,summary:string,incident:string,objective:string,difficulty:string,
+      characters:{type:'array',items:{type:'object',properties:{id:string,name:string,role:string,initials:string,kind:string,publicDescription:string,secret:string,personality:string},required:['id','name','role','kind','publicDescription','secret','personality']}},
+      clues:{type:'array',items:{type:'object',properties:{key:string,title:string,description:string,hiddenTruth:string},required:['key','title','description','hiddenTruth']}},
+      solution:{type:'object',properties:{culpritId:string,motive:string,method:string,fullExplanation:string},required:['culpritId','motive','method','fullExplanation']},
+      world:{type:'object',properties:{locations:{type:'array',items:genericObject},devices:{type:'array',items:genericObject},cameras:{type:'array',items:genericObject}},required:['locations','devices','cameras']}
+    },
+    required:['title','summary','incident','objective','difficulty','characters','clues','solution','world']
+  };
+}
+
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const format=(()=>{
     if(!responseSchema) return undefined;
     const converted=toJsonSchema(responseSchema);
-    const f:any={type:'text',mime_type:'application/json'};
-    if(JSON.stringify(converted).length<3500) f.schema=converted;
-    return f;
+    const schema=JSON.stringify(converted).length<3500?converted:largeJsonShape();
+    return {type:'text',mime_type:'application/json',schema};
   })();
 
   const merged=\`INSTRUÇÕES DE SISTEMA:\n\${systemInstruction}\n\nENTRADA:\n\${input}\`;
@@ -105,4 +120,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: 3.6 principal, fallbacks em quota e validação flexível de caso.');
+console.log('Gemini Interactions: arrays do caso forçados por schema intermediário.');
