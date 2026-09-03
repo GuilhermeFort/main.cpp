@@ -1,17 +1,9 @@
 import { getSupabase } from '../../../lib/supabase';
 import { decryptSecret } from '../../../lib/secrets';
+import { generateMystery } from '../../../lib/gemini';
 
 export const dynamic='force-dynamic';
 export const maxDuration=60;
-
-async function call(apiKey:string,payload:any){
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-    method:'POST',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
-    body:JSON.stringify(payload),signal:AbortSignal.timeout(55000)
-  });
-  const text=await r.text();
-  return {status:r.status,ok:r.ok,text:text.slice(0,700)};
-}
 
 export async function GET(req:Request){
   try{
@@ -23,14 +15,8 @@ export async function GET(req:Request){
     if(error) throw error;
     const apiKey=room?.api_key_cipher?await decryptSecret(room.api_key_cipher):process.env.GEMINI_API_KEY;
     if(!apiKey) throw new Error('Sem API key do Gemini para smoke test.');
-
-    const base={model:'gemini-3.6-flash',input:'Responda apenas OK.'};
-    const a=await call(apiKey,base);
-    const b=await call(apiKey,{...base,system_instruction:'Você é um teste. Responda somente OK.'});
-    const c=await call(apiKey,{...base,generation_config:{max_output_tokens:100}});
-    const d=await call(apiKey,{...base,system_instruction:'Você é um teste. Responda somente OK.',generation_config:{max_output_tokens:100}});
-    const e=await call(apiKey,{...base,system_instruction:'X'.repeat(12000)});
-    return Response.json({ok:true,a,b,c,d,e});
+    const mystery=await generateMystery(apiKey,'dificil');
+    return Response.json({ok:true,title:mystery.title,characters:mystery.characters.length,clues:mystery.clues.length,locations:(mystery as any).world?.locations?.length||0,devices:(mystery as any).world?.devices?.length||0,cameras:(mystery as any).world?.cameras?.length||0});
   }catch(error){
     return Response.json({ok:false,error:error instanceof Error?error.message:'smoke_error'},{status:500});
   }
