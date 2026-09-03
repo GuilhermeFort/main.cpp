@@ -18,7 +18,8 @@ const copies=[
   ['overrides/learning-route.ts','app/api/ai-learning/route.ts','API interna de aprendizado ativada.'],
   ['overrides/investigation-state-route.ts','app/api/investigation-state/route.ts','API de evidências/timeline/hipóteses ativada.'],
   ['overrides/world-route.ts','app/api/world-state/route.ts','API de mapa, digital, câmeras, mural e jurídico ativada.'],
-  ['overrides/messages-route.ts','app/api/messages/route.ts','Memória isolada por personagem e aprendizado automático ativados.']
+  ['overrides/messages-route.ts','app/api/messages/route.ts','Memória isolada por personagem e aprendizado automático ativados.'],
+  ['overrides/gemini-smoke-route.ts','app/api/gemini-smoke/route.ts','Smoke test temporário do Gemini ativado.']
 ];
 for(const [src,dst,msg] of copies){if(fs.existsSync(src)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);console.log(msg)}}
 
