@@ -9,4 +9,18 @@ for (const [file, content] of Object.entries(files)) {
   fs.writeFileSync(file, content, 'utf8');
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
-console.log('ARQUIVOS_RESTAURADOS:', Object.keys(files).join(' | '));
+
+// Injeta as ferramentas novas sem reescrever o frontend original.
+const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
+let injected=false;
+for(const file of layouts){
+  let src=fs.readFileSync(file,'utf8');
+  if(src.includes('/investigation-tools.js')){injected=true;continue;}
+  if(src.includes('</body>')){
+    src=src.replace('</body>','<script src="/investigation-tools.js" defer></script></body>');
+    fs.writeFileSync(file,src,'utf8');
+    console.log('Caderno avançado e painel de evidências ativados em',file);
+    injected=true;
+  }
+}
+if(!injected) console.warn('Layout não encontrado para ativar as ferramentas de investigação.');
