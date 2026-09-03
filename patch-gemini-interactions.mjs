@@ -19,6 +19,24 @@ const replacement=`function toJsonSchema(value:any):any{
   return out;
 }
 
+function compactSchema(schema:any):any{
+  const converted=toJsonSchema(schema);
+  const size=JSON.stringify(converted).length;
+  if(size<3500) return converted;
+  if(converted?.type!=='object'||!converted?.properties) return {type:'object'};
+  const props:any={};
+  for(const [key,val] of Object.entries(converted.properties as Record<string,any>)){
+    const v:any=val;
+    if(v?.type==='array') props[key]={type:'array',items:{type:'object'}};
+    else if(v?.type==='object') props[key]={type:'object'};
+    else {
+      props[key]={type:v?.type||'string'};
+      if(Array.isArray(v?.enum)) props[key].enum=v.enum;
+    }
+  }
+  return {type:'object',properties:props,required:Array.isArray(converted.required)?converted.required:undefined};
+}
+
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const payload:any={
     model:'gemini-3.6-flash',
@@ -31,7 +49,7 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     payload.response_format={
       type:'text',
       mime_type:'application/json',
-      schema:toJsonSchema(responseSchema)
+      schema:compactSchema(responseSchema)
     };
   }
 
@@ -79,4 +97,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: response_format objeto verificado e parser output_text corrigidos.');
+console.log('Gemini Interactions: schemas grandes compactados e validação mantida no backend.');
