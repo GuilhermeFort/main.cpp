@@ -21,20 +21,7 @@ const replacement=`function toJsonSchema(value:any):any{
 
 function compactSchema(schema:any):any{
   const converted=toJsonSchema(schema);
-  const size=JSON.stringify(converted).length;
-  if(size<3500) return converted;
-  if(converted?.type!=='object'||!converted?.properties) return {type:'object'};
-  const props:any={};
-  for(const [key,val] of Object.entries(converted.properties as Record<string,any>)){
-    const v:any=val;
-    if(v?.type==='array') props[key]={type:'array',items:{type:'object'}};
-    else if(v?.type==='object') props[key]={type:'object'};
-    else {
-      props[key]={type:v?.type||'string'};
-      if(Array.isArray(v?.enum)) props[key].enum=v.enum;
-    }
-  }
-  return {type:'object',properties:props,required:Array.isArray(converted.required)?converted.required:undefined};
+  return JSON.stringify(converted).length<3500 ? converted : {type:'object'};
 }
 
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
@@ -46,11 +33,7 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     generation_config:{max_output_tokens:maxOutputTokens}
   };
   if(responseSchema){
-    payload.response_format={
-      type:'text',
-      mime_type:'application/json',
-      schema:compactSchema(responseSchema)
-    };
+    payload.response_format={type:'text',mime_type:'application/json',schema:compactSchema(responseSchema)};
   }
 
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
@@ -97,4 +80,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: schemas grandes compactados e validação mantida no backend.');
+console.log('Gemini Interactions: schema mínimo para respostas gigantes ativado.');
