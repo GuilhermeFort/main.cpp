@@ -10,11 +10,6 @@ for (const [file, content] of Object.entries(files)) {
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
-if(fs.existsSync('overrides/supabase.ts')){
-  fs.mkdirSync('lib',{recursive:true});
-  fs.copyFileSync('overrides/supabase.ts','lib/supabase.ts');
-  console.log('Adaptador Supabase compatível aplicado.');
-}
 if(fs.existsSync('overrides/gemini.ts')){
   fs.mkdirSync('lib',{recursive:true});
   fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
@@ -29,6 +24,11 @@ if(fs.existsSync('overrides/learning-route.ts')){
   fs.mkdirSync('app/api/ai-learning',{recursive:true});
   fs.copyFileSync('overrides/learning-route.ts','app/api/ai-learning/route.ts');
   console.log('API interna de aprendizado ativada.');
+}
+if(fs.existsSync('overrides/messages-route.ts')){
+  fs.mkdirSync('app/api/messages',{recursive:true});
+  fs.copyFileSync('overrides/messages-route.ts','app/api/messages/route.ts');
+  console.log('Captura automática teacher/student ativada nas conversas.');
 }
 
 const layouts=Object.keys(files).filter(f=>/layout\.(tsx|jsx|js|ts)$/.test(f));
