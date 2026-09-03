@@ -10,11 +10,21 @@ for (const [file, content] of Object.entries(files)) {
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
-// Mantém o frontend original, mas substitui o cérebro antigo pela versão nova.
+// Aplica módulos mais novos depois de restaurar o bundle original.
 if(fs.existsSync('overrides/gemini.ts')){
+  fs.mkdirSync('lib',{recursive:true});
   fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
-  fs.rmSync('overrides',{recursive:true,force:true});
   console.log('Motor Gemini avançado aplicado.');
+}
+if(fs.existsSync('overrides/learning.ts')){
+  fs.mkdirSync('lib',{recursive:true});
+  fs.copyFileSync('overrides/learning.ts','lib/learning.ts');
+  console.log('Pipeline teacher/student aplicado.');
+}
+if(fs.existsSync('overrides/learning-route.ts')){
+  fs.mkdirSync('app/api/ai-learning',{recursive:true});
+  fs.copyFileSync('overrides/learning-route.ts','app/api/ai-learning/route.ts');
+  console.log('API interna de aprendizado ativada.');
 }
 
 // Injeta o caderno avançado/painel de evidências no layout restaurado.
@@ -31,3 +41,6 @@ for(const file of layouts){
   }
 }
 if(!injected) console.warn('Layout não encontrado para ativar as ferramentas de investigação.');
+
+// Overrides são apenas artefatos de build; não devem entrar no TypeScript do app.
+if(fs.existsSync('overrides')) fs.rmSync('overrides',{recursive:true,force:true});
