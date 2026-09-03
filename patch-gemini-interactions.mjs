@@ -28,11 +28,11 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     generation_config:{max_output_tokens:maxOutputTokens}
   };
   if(responseSchema){
-    payload.response_format=[{
+    payload.response_format={
       type:'text',
       mime_type:'application/json',
       schema:toJsonSchema(responseSchema)
-    }];
+    };
   }
 
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
@@ -79,4 +79,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: response_format em array e parser output_text corrigidos.');
+console.log('Gemini Interactions: response_format objeto verificado e parser output_text corrigidos.');
