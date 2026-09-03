@@ -1,9 +1,17 @@
 import { getSupabase } from '../../../lib/supabase';
 import { decryptSecret } from '../../../lib/secrets';
-import { generateMystery } from '../../../lib/gemini';
 
 export const dynamic='force-dynamic';
 export const maxDuration=60;
+
+async function call(apiKey:string,payload:any){
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+    method:'POST',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
+    body:JSON.stringify(payload),signal:AbortSignal.timeout(55000)
+  });
+  const text=await r.text();
+  return {status:r.status,ok:r.ok,text:text.slice(0,500)};
+}
 
 export async function GET(req:Request){
   try{
@@ -15,8 +23,13 @@ export async function GET(req:Request){
     if(error) throw error;
     const apiKey=room?.api_key_cipher?await decryptSecret(room.api_key_cipher):process.env.GEMINI_API_KEY;
     if(!apiKey) throw new Error('Sem API key do Gemini para smoke test.');
-    const mystery=await generateMystery(apiKey,'dificil');
-    return Response.json({ok:true,title:mystery.title,characters:mystery.characters.length,clues:mystery.clues.length,locations:(mystery as any).world?.locations?.length||0,devices:(mystery as any).world?.devices?.length||0,cameras:(mystery as any).world?.cameras?.length||0});
+
+    const base={model:'gemini-3.6-flash',input:'Retorne um JSON simples.'};
+    const token6500=await call(apiKey,{...base,generation_config:{max_output_tokens:6500}});
+    const jsonNoSchema=await call(apiKey,{...base,response_format:{type:'text',mime_type:'application/json'}});
+    const combined=await call(apiKey,{...base,system_instruction:'Você é um motor narrativo de investigação. Mantenha a verdade fixa e responda em JSON.',generation_config:{max_output_tokens:6500}});
+    const all=await call(apiKey,{...base,system_instruction:'Você é um motor narrativo de investigação. Mantenha a verdade fixa e responda em JSON.',generation_config:{max_output_tokens:6500},response_format:{type:'text',mime_type:'application/json'}});
+    return Response.json({ok:true,token6500,jsonNoSchema,combined,all});
   }catch(error){
     return Response.json({ok:false,error:error instanceof Error?error.message:'smoke_error'},{status:500});
   }
