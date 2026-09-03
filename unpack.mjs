@@ -9,3 +9,4 @@ for (const [file, content] of Object.entries(files)) {
   fs.writeFileSync(file, content, 'utf8');
 }
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
+console.log('ARQUIVOS_RESTAURADOS:', Object.keys(files).join(' | '));
