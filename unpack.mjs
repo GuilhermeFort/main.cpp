@@ -13,6 +13,7 @@ console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.
 // Mantém o frontend original, mas substitui o cérebro antigo pela versão nova.
 if(fs.existsSync('overrides/gemini.ts')){
   fs.copyFileSync('overrides/gemini.ts','lib/gemini.ts');
+  fs.rmSync('overrides',{recursive:true,force:true});
   console.log('Motor Gemini avançado aplicado.');
 }
 
