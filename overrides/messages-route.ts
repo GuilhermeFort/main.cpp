@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       db.from("messages").select("author,content,id,role,thread_player_id").eq("room_code", roomCode).eq("target",target).order("id", { ascending: true }).limit(60),
     ]);
     throwIfError(foundError); throwIfError(recentError);
-    const found = (foundRows || []).map((item) => item.clue_key);
+    const found = (foundRows || []).map((item:any) => item.clue_key);
     let psych:any=null;
     if(target!=="narrador") psych=await loadCharacterState(db,roomCode,target);
     const psychContext=psych?`\n[ESTADO PSICOLÓGICO PERSISTENTE DO DEPOENTE — NÃO MOSTRAR AO JOGADOR]\n${JSON.stringify(stateForPrompt(psych))}\n`:'';
