@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
 
 export type LearningExample={
   roomCode?:string|null; sourceMessageId?:number|null; characterId?:string|null; taskType:string;
@@ -24,6 +24,7 @@ export function heuristicLearningScores(input:string,output=''){
 }
 
 export async function recordTrainingExample(e:LearningExample){
+  const supabase=getSupabase();
   const auto=heuristicLearningScores(e.inputText,e.correctedOutput||e.teacherOutput||'');
   const importance=clamp(e.importance??auto.importance),quality=clamp(e.quality??auto.quality),novelty=clamp(e.novelty??auto.novelty);
   const keep=importance>=55&&quality>=70&&novelty>=45;
@@ -41,6 +42,7 @@ export async function recordTrainingExample(e:LearningExample){
 }
 
 export async function rememberImportant(input:{scope:string;roomCode?:string|null;characterId?:string|null;memoryType:string;content:string;summary?:string|null;importance?:number;confidence?:number;metadata?:Record<string,unknown>;expiresAt?:string|null}){
+  const supabase=getSupabase();
   const importance=clamp(input.importance??60),confidence=clamp(input.confidence??75);
   if(importance<35)return {stored:false,reason:'low_importance'};
   const contentHash=hash([input.scope,input.roomCode||'',input.characterId||'',input.memoryType,input.content].join('|'));
@@ -54,11 +56,13 @@ export async function rememberImportant(input:{scope:string;roomCode?:string|nul
 }
 
 export async function learningMetrics(){
+  const supabase=getSupabase();
   const {data,error}=await supabase.from('ai_learning_metrics').select('*').single();
   if(error)throw error; return data;
 }
 
 export async function pruneLearningData(days=30){
+  const supabase=getSupabase();
   const {data,error}=await supabase.rpc('prune_ai_learning_data',{max_low_value_age_days:days});
   if(error)throw error; return data;
 }
