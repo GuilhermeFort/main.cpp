@@ -20,22 +20,26 @@ const replacement=`function toJsonSchema(value:any):any{
 }
 
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
+  const payload:any={
+    model:'gemini-3.6-flash',
+    input,
+    system_instruction:systemInstruction,
+    store:false,
+    generation_config:{max_output_tokens:maxOutputTokens}
+  };
+  if(responseSchema){
+    payload.response_format=[{
+      type:'text',
+      mime_type:'application/json',
+      schema:toJsonSchema(responseSchema)
+    }];
+  }
+
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
     method:'POST',
-    headers:{
-      'x-goog-api-key':apiKey,
-      'Content-Type':'application/json',
-      'Api-Revision':'2026-05-20'
-    },
+    headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
     signal:AbortSignal.timeout(55000),
-    body:JSON.stringify({
-      model:'gemini-3.6-flash',
-      input,
-      system_instruction:systemInstruction,
-      store:false,
-      generation_config:{max_output_tokens:maxOutputTokens},
-      ...(responseSchema?{response_format:{type:'text',mime_type:'application/json',schema:toJsonSchema(responseSchema)}}:{})
-    })
+    body:JSON.stringify(payload)
   });
   const raw=await response.text();
   let data:any=null;
@@ -45,13 +49,15 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     throw new Error(message);
   }
   if(data?.status==='failed') throw new Error(data?.errors?.map((e:any)=>e.message).filter(Boolean).join('; ')||'A interação do Gemini falhou.');
-  const text=(data?.steps||[])
-    .filter((step:any)=>step?.type==='model_output')
-    .flatMap((step:any)=>step.content||[])
-    .filter((part:any)=>part?.type==='text')
-    .map((part:any)=>part.text||'')
-    .join('')
-    .trim();
+  const text=(typeof data?.output_text==='string'&&data.output_text.trim())
+    ? data.output_text.trim()
+    : (data?.steps||[])
+        .filter((step:any)=>step?.type==='model_output')
+        .flatMap((step:any)=>step.content||[])
+        .filter((part:any)=>part?.type==='text')
+        .map((part:any)=>part.text||'')
+        .join('')
+        .trim();
   if(!text) throw new Error('O Gemini devolveu uma resposta vazia.');
   const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
   try{return JSON.parse(cleaned)}catch{
@@ -73,4 +79,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: structured JSON output corrigido com Api-Revision 2026-05-20.');
+console.log('Gemini Interactions: response_format em array e parser output_text corrigidos.');
