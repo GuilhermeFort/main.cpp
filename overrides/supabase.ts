@@ -7,4 +7,5 @@ export function getSupabase(){
   return client;
 }
 export const supabase=getSupabase();
+export function throwIfError(error:any){if(error)throw error;}
 export async function one<T=any>(query:PromiseLike<{data:any,error:any}>){const {data,error}=await query;if(error)throw error;return data as T;}
