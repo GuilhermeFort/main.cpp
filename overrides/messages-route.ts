@@ -52,8 +52,15 @@ export async function POST(request: Request) {
       reply = target === "narrador" ? `A Central registrou sua pergunta. Configure o Gemini para investigar este caso de forma livre. Por enquanto, concentrem-se em: ${mystery.objective}` : `${character?.name || "O suspeito"} observa vocês em silêncio. Configure o Gemini para iniciar o interrogatório livre.`;
     }
     if (revealClueKey && mystery.clues.some((clue) => clue.key === revealClueKey)) {
+      const clue=mystery.clues.find((c:any)=>c.key===revealClueKey)!;
       const { error } = await db.from("discovered_clues").upsert({ room_code: roomCode, clue_key: revealClueKey, discovered_by: player.player_id }, { onConflict: "room_code,clue_key", ignoreDuplicates: true });
       throwIfError(error);
+      const evidenceCode=`CLUE-${revealClueKey}`;
+      const {data:existing}=await db.from('evidence_items').select('id').eq('room_code',roomCode).eq('evidence_code',evidenceCode).maybeSingle();
+      if(!existing){
+        const {error:eErr}=await db.from('evidence_items').insert({room_code:roomCode,evidence_code:evidenceCode,title:clue.title,description:clue.description,category:'clue',source_type:target==='narrador'?'official_investigation':'interview',location_found:null,collected_by:player.name,collected_at:new Date().toISOString(),reliability:85,canonical_fact:{clueKey:clue.key,hiddenTruth:clue.hiddenTruth},discovered:true,discovered_by:player.player_id});
+        if(!eErr)await db.from('custody_events').insert({room_code:roomCode,evidence_code:evidenceCode,actor:player.name,action:'descoberta registrada',location:null,details:`Pista obtida em ${target==='narrador'?'diligência da Central':`conversa com ${target}`}.`});
+      }
     }
     const author = target === "narrador" ? "Central" : mystery.characters.find((item) => item.id === target)?.name || "Suspeito";
     const {data:savedMessage,error:savedError}=await db.from("messages").insert({ room_code: roomCode, thread_player_id: player.player_id, author, role: "character", target, content: reply }).select("id").single();
