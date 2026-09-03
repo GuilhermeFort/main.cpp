@@ -13,7 +13,7 @@ export async function GET(request:Request){
     const db=getSupabase(),player=await validPlayer(db,room,playerId);
     if(!player)return Response.json({error:'Sessão inválida.'},{status:403});
     const [e,t,h,tasks,notes,custody]=await Promise.all([
-      db.from('evidence_items').select('*').eq('room_code',room).eq('discovered',true).order('id'),
+      db.from('evidence_items').select('id,room_code,evidence_code,title,description,category,source_type,location_found,collected_by,collected_at,reliability,discovered,discovered_by,created_at').eq('room_code',room).eq('discovered',true).order('id'),
       db.from('timeline_events').select('*').eq('room_code',room).order('event_time',{ascending:true,nullsFirst:false}).order('id',{ascending:true}),
       db.from('hypotheses').select('*').eq('room_code',room).or(`shared.eq.true,owner_player_id.eq.${playerId}`).order('updated_at',{ascending:false}),
       db.from('investigation_tasks').select('*').eq('room_code',room).order('created_at',{ascending:false}),
@@ -51,10 +51,8 @@ export async function POST(request:Request){
     if(body.action==='task'){
       const {data,error}=await db.from('investigation_tasks').insert({room_code:room,requested_by:playerId,task_type:body.taskType||'analysis',target:body.target||null,status:'pending',request_data:body.requestData||{},result_data:{},ready_at:body.readyAt||null}).select('*').single();throwIfError(error);return Response.json({ok:true,result:data});
     }
-    if(body.action==='update_task'){
-      const allowed=['pending','in_progress','completed','cancelled']; const status=allowed.includes(body.status)?body.status:'pending';
-      const payload:any={status}; if(body.resultData!==undefined)payload.result_data=body.resultData||{}; if(status==='completed')payload.completed_at=new Date().toISOString();
-      const {data,error}=await db.from('investigation_tasks').update(payload).eq('id',body.id).eq('room_code',room).select('*').single();throwIfError(error);return Response.json({ok:true,result:data});
+    if(body.action==='cancel_task'){
+      const {data,error}=await db.from('investigation_tasks').update({status:'cancelled'}).eq('id',body.id).eq('room_code',room).eq('requested_by',playerId).eq('status','pending').select('*').single();throwIfError(error);return Response.json({ok:true,result:data});
     }
     if(body.action==='custody'){
       const {data,error}=await db.from('custody_events').insert({room_code:room,evidence_code:String(body.evidenceCode||'').slice(0,80),actor:player.name,action:String(body.custodyAction||'registrado').slice(0,120),location:body.location||null,details:body.details||null}).select('*').single();throwIfError(error);return Response.json({ok:true,result:data});
