@@ -19,11 +19,6 @@ const replacement=`function toJsonSchema(value:any):any{
   return out;
 }
 
-function compactSchema(schema:any):any{
-  const converted=toJsonSchema(schema);
-  return JSON.stringify(converted).length<3500 ? converted : {type:'object'};
-}
-
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const payload:any={
     model:'gemini-3.6-flash',
@@ -33,7 +28,10 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
     generation_config:{max_output_tokens:maxOutputTokens}
   };
   if(responseSchema){
-    payload.response_format={type:'text',mime_type:'application/json',schema:compactSchema(responseSchema)};
+    const converted=toJsonSchema(responseSchema);
+    const format:any={type:'text',mime_type:'application/json'};
+    if(JSON.stringify(converted).length<3500) format.schema=converted;
+    payload.response_format=format;
   }
 
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
@@ -80,4 +78,4 @@ src=src.replace(
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: schema mínimo para respostas gigantes ativado.');
+console.log('Gemini Interactions: schema omitido em respostas gigantes; JSON continua obrigatório.');
