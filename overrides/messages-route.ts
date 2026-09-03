@@ -3,6 +3,7 @@ import { readCase } from "../../../lib/case";
 import { answerMystery } from "../../../lib/gemini";
 import { decryptSecret } from "../../../lib/secrets";
 import { heuristicLearningScores, recordTrainingExample, rememberImportant } from "../../../lib/learning";
+import { runStudentShadow } from "../../../lib/student";
 import { evolveCharacterState, loadCharacterState, stateForPrompt } from "../../../lib/psychology";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -95,15 +96,17 @@ export async function POST(request: Request) {
     if(usedTeacher){
       const scores=heuristicLearningScores(content,reply);
       const learningInput=`Papel: ${target==='narrador'?'Central de investigação':target}\nPergunta do detetive: ${content}\nPistas já descobertas: ${found.join(', ')||'nenhuma'}\nContexto recente do MESMO alvo: ${(recent||[]).slice(-12).map((x:any)=>`${x.author}: ${x.content}`).join(' | ')}`;
-      const jobs:Promise<unknown>[]=[recordTrainingExample({
+      const example=await recordTrainingExample({
         roomCode,sourceMessageId:savedMessage?.id||null,characterId:target==='narrador'?null:target,
         taskType:taskRow?'forensic_task':target==='narrador'?'investigation_action':'character_interrogation',inputText:learningInput,
         teacherOutput:reply,teacherModel:'gemini',importance:scores.importance,quality:scores.quality,novelty:scores.novelty,
         metadata:{difficulty:mystery.difficulty,target,revealedClue:revealClueKey||null,clueCount:found.length,psychologyPersistent:target!=='narrador',taskId:taskRow?.id||null}
-      })];
+      }).catch(()=>null as any);
+      const jobs:Promise<unknown>[]=[];
       if(scores.importance>=55 || revealClueKey){
         jobs.push(rememberImportant({scope:'room',roomCode,characterId:target==='narrador'?null:target,memoryType:revealClueKey?'clue_interaction':taskRow?'forensic_result':'important_interaction',content:`Pergunta: ${content}\nResposta: ${reply}`,summary:revealClueKey?`Interação que revelou ${revealClueKey}`:taskRow?`Resultado de ${taskRow.task_type}`:`Interação relevante com ${target}`,importance:Math.max(scores.importance,revealClueKey?85:taskRow?80:0),confidence:scores.quality,metadata:{messageId:savedMessage?.id||null,target,revealClueKey:revealClueKey||null,taskId:taskRow?.id||null}}));
       }
+      jobs.push(runStudentShadow(learningInput,reply,example?.id||null));
       await Promise.allSettled(jobs);
     }
     return Response.json({ ok: true });
