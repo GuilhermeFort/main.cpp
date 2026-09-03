@@ -99,6 +99,10 @@ src=src.replace(
   'Retorne {"reply":string,"revealClueKey":string|null}.',
   'Retorne {"reply":string}. Inclua revealClueKey apenas quando uma pista real for legitimamente descoberta.'
 );
+src=src.replace(
+  "if(!mystery.title||mystery.characters?.length!==suspectCount+supportCount||suspects.length!==suspectCount||support.length!==supportCount||mystery.clues?.length!==clueCount||!suspects.some(x=>x.id===mystery.solution?.culpritId)||!world?.locations?.length||!world?.devices?.length||!world?.cameras?.length) throw new Error('O Gemini montou um caso incompleto. Tente novamente.');",
+  "if(!mystery.title||suspects.length<4||support.length<2||(mystery.clues?.length||0)<7||!suspects.some(x=>x.id===mystery.solution?.culpritId)||!world?.locations?.length||!world?.devices?.length||!world?.cameras?.length) throw new Error('O Gemini montou um caso incompleto. Tente novamente.');"
+);
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: 3.6 principal, 3.7 e 3.5 fallbacks em quota.');
+console.log('Gemini Interactions: 3.6 principal, fallbacks em quota e validação flexível de caso.');
