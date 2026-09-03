@@ -35,6 +35,16 @@ function largeJsonShape(){
   };
 }
 
+function validParsedShape(parsed:any,responseSchema?:object){
+  const props=(responseSchema as any)?.properties;
+  if(!props) return true;
+  if(props.characters){
+    return !!parsed && typeof parsed==='object' && Array.isArray(parsed.characters) && Array.isArray(parsed.clues) && !!parsed.solution && typeof parsed.solution==='object' && !!parsed.world && typeof parsed.world==='object' && Array.isArray(parsed.world.locations) && Array.isArray(parsed.world.devices) && Array.isArray(parsed.world.cameras);
+  }
+  if(props.reply) return !!parsed && typeof parsed.reply==='string';
+  return true;
+}
+
 async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const format=(()=>{
     if(!responseSchema) return undefined;
@@ -55,7 +65,7 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
       {model,input,system_instruction:safeSystem,store:false,generation_config:{max_output_tokens:maxOutputTokens},...(format?{response_format:format}:{})},
       {model,input:merged,store:false,generation_config:{max_output_tokens:maxOutputTokens},...(format?{response_format:format}:{})},
       {model,input:merged,store:false,...(format?{response_format:format}:{})},
-      {model,input:merged+'\\n\\nRetorne SOMENTE um objeto JSON válido, sem markdown.',store:false}
+      {model,input:merged+'\\n\\nRetorne SOMENTE um objeto JSON válido, sem markdown.',store:false,...(format?{response_format:format}:{})}
     ];
 
     let quotaHit=false;
@@ -97,7 +107,15 @@ async function generate(apiKey:string,systemInstruction:string,input:string,maxO
             .trim();
       if(!text){lastMessage='O Gemini devolveu uma resposta vazia.';if(i<variants.length-1)continue;break;}
       const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
-      try{return JSON.parse(cleaned)}catch{
+      try{
+        const parsed=JSON.parse(cleaned);
+        if(!validParsedShape(parsed,responseSchema)){
+          lastMessage='O Gemini devolveu JSON com estrutura inválida.';
+          if(i<variants.length-1) continue;
+          break;
+        }
+        return parsed;
+      }catch{
         lastMessage='O Gemini respondeu em formato inesperado. A resposta estruturada não pôde ser lida.';
         if(i<variants.length-1) continue;
         break;
@@ -123,9 +141,9 @@ src=src.replace(
 );
 src=src.replace(
   "if(!mystery.title||mystery.characters?.length!==suspectCount+supportCount||suspects.length!==suspectCount||support.length!==supportCount||mystery.clues?.length!==clueCount||!suspects.some(x=>x.id===mystery.solution?.culpritId)||!world?.locations?.length||!world?.devices?.length||!world?.cameras?.length) throw new Error('O Gemini montou um caso incompleto. Tente novamente.');",
-  "if(!mystery.title||suspects.length<4||support.length<2||(mystery.clues?.length||0)<7||!suspects.some(x=>x.id===mystery.solution?.culpritId)||!world?.locations?.length||!world?.devices?.length||!world?.cameras?.length) throw new Error('O Gemini montou um caso incompleto. Tente novamente.');"
+  "if(!mystery.title||!Array.isArray(mystery.characters)||!Array.isArray(mystery.clues)||suspects.length<4||support.length<2||(mystery.clues?.length||0)<7||!suspects.some(x=>x.id===mystery.solution?.culpritId)||!world||!Array.isArray(world.locations)||!Array.isArray(world.devices)||!Array.isArray(world.cameras)||!world.locations.length||!world.devices.length||!world.cameras.length) throw new Error('O Gemini montou um caso incompleto. Tente novamente.');"
 );
 src=src.replace('Você é o motor invisível de uma investigação criminal ficcional extremamente realista.','Você é o motor invisível de uma obra ficcional de mistério investigativo com personagens emocionalmente realistas.');
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini Interactions: schema intermediário, fallbacks de quota e contexto ficcional seguro ativados.');
+console.log('Gemini Interactions: JSON validado estruturalmente antes de aceitar casos e respostas.');
