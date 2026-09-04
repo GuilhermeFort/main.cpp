@@ -29,6 +29,9 @@ if(fs.existsSync('patch-gemini-interactions.mjs')){
 if(fs.existsSync('patch-gemini-rate-limit.mjs')){
   await import(`./patch-gemini-rate-limit.mjs?ts=${Date.now()}`);
 }
+if(fs.existsSync('patch-gemini-fast-case.mjs')){
+  await import(`./patch-gemini-fast-case.mjs?ts=${Date.now()}`);
+}
 
 if(fs.existsSync('app/api/gemini-smoke')) fs.rmSync('app/api/gemini-smoke',{recursive:true,force:true});
 
