@@ -26,6 +26,9 @@ for(const [src,dst,msg] of copies){if(fs.existsSync(src)){fs.mkdirSync(path.dirn
 if(fs.existsSync('patch-gemini-interactions.mjs')){
   await import(`./patch-gemini-interactions.mjs?ts=${Date.now()}`);
 }
+if(fs.existsSync('patch-gemini-rate-limit.mjs')){
+  await import(`./patch-gemini-rate-limit.mjs?ts=${Date.now()}`);
+}
 
 if(fs.existsSync('app/api/gemini-smoke')) fs.rmSync('app/api/gemini-smoke',{recursive:true,force:true});
 
