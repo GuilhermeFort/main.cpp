@@ -11,6 +11,7 @@ for (const [file, content] of Object.entries(files)) {
 console.log(`Restaurados ${Object.keys(files).length} arquivos do jogo completo.`);
 
 const copies=[
+  ['overrides/case.ts','lib/case.ts','Mundo investigável do caso legado aplicado.'],
   ['overrides/gemini.ts','lib/gemini.ts','Motor Gemini avançado aplicado.'],
   ['overrides/learning.ts','lib/learning.ts','Pipeline teacher/student aplicado.'],
   ['overrides/student.ts','lib/student.ts','Executor shadow da IA própria aplicado.'],
