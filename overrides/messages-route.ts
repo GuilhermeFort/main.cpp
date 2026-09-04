@@ -4,7 +4,7 @@ import { answerMystery } from "../../../lib/gemini";
 import { decryptSecret } from "../../../lib/secrets";
 import { heuristicLearningScores, recordTrainingExample, rememberImportant } from "../../../lib/learning";
 import { runStudentShadow } from "../../../lib/student";
-import { evolveCharacterState, loadCharacterState, stateForPrompt } from "../../../lib/psychology";
+import { evolveCharacterState, evolvePlayerRelation, loadCharacterState, loadPlayerRelation, relationForPrompt, stateForPrompt } from "../../../lib/psychology";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
@@ -40,16 +40,23 @@ export async function POST(request: Request) {
     const target = requestedTaskId ? "narrador" : (body.target === "narrador" || mystery.characters.some((item) => item.id === body.target) ? body.target! : "narrador");
     throwIfError((await db.from("messages").insert({ room_code: roomCode, thread_player_id: player.player_id, author: player.name, role: "detective", target, content })).error);
 
-    const [{ data: foundRows, error: foundError }, { data: recent, error: recentError }] = await Promise.all([
+    const [{ data: foundRows, error: foundError }, { data: recentDesc, error: recentError }] = await Promise.all([
       db.from("discovered_clues").select("clue_key").eq("room_code", roomCode),
-      db.from("messages").select("author,content,id,role,thread_player_id").eq("room_code", roomCode).eq("target",target).order("id", { ascending: true }).limit(60),
+      db.from("messages").select("author,content,id,role,thread_player_id").eq("room_code", roomCode).eq("target",target).order("id", { ascending: false }).limit(60),
     ]);
     throwIfError(foundError); throwIfError(recentError);
     const found = (foundRows || []).map((item:any) => item.clue_key);
-    let psych:any=null;
-    if(target!=="narrador") psych=await loadCharacterState(db,roomCode,target);
+    const recent=(recentDesc||[]).slice().reverse();
+    let psych:any=null,relation:any=null;
+    if(target!=="narrador"){
+      [psych,relation]=await Promise.all([
+        loadCharacterState(db,roomCode,target),
+        loadPlayerRelation(db,roomCode,target,player.player_id)
+      ]);
+    }
     const psychContext=psych?`\n[ESTADO PSICOLÓGICO PERSISTENTE DO DEPOENTE — NÃO MOSTRAR AO JOGADOR]\n${JSON.stringify(stateForPrompt(psych))}\n`:'';
-    const history = psychContext+(recent || []).slice(-18).map((item:any) => `${item.author}: ${item.content}`).join(" | ");
+    const relationContext=relation?`\n[RELAÇÃO PERSISTENTE COM ESTE DETETIVE — NÃO MOSTRAR AO JOGADOR]\n${JSON.stringify(relationForPrompt(relation))}\n`:'';
+    const history = psychContext+relationContext+recent.slice(-18).map((item:any) => `${item.author}: ${item.content}`).join(" | ");
     const apiKey = room.api_key_cipher ? await decryptSecret(room.api_key_cipher) : process.env.GEMINI_API_KEY;
     let reply: string; let revealClueKey: string | null | undefined;
     let usedTeacher=false;
@@ -88,19 +95,22 @@ export async function POST(request: Request) {
       ]);
     }
 
+    const validEvidence=psych?evidenceWasValid(content,mystery,found):false;
     if(psych){
-      const validEvidence=evidenceWasValid(content,mystery,found);
-      await evolveCharacterState(db,psych,{question:content,reply,culprit:target===mystery.solution.culpritId,validEvidence,revealedClue:revealClueKey||null}).catch(()=>null);
+      await Promise.allSettled([
+        evolveCharacterState(db,psych,{question:content,reply,culprit:target===mystery.solution.culpritId,validEvidence,revealedClue:revealClueKey||null}),
+        relation?evolvePlayerRelation(db,relation,{question:content,reply,validEvidence}):Promise.resolve(null)
+      ]);
     }
 
     if(usedTeacher){
       const scores=heuristicLearningScores(content,reply);
-      const learningInput=`Papel: ${target==='narrador'?'Central de investigação':target}\nPergunta do detetive: ${content}\nPistas já descobertas: ${found.join(', ')||'nenhuma'}\nContexto recente do MESMO alvo: ${(recent||[]).slice(-12).map((x:any)=>`${x.author}: ${x.content}`).join(' | ')}`;
+      const learningInput=`Papel: ${target==='narrador'?'Central de investigação':target}\nPergunta do detetive: ${content}\nPistas já descobertas: ${found.join(', ')||'nenhuma'}\nContexto recente do MESMO alvo: ${recent.slice(-12).map((x:any)=>`${x.author}: ${x.content}`).join(' | ')}`;
       const example=await recordTrainingExample({
         roomCode,sourceMessageId:savedMessage?.id||null,characterId:target==='narrador'?null:target,
         taskType:taskRow?'forensic_task':target==='narrador'?'investigation_action':'character_interrogation',inputText:learningInput,
-        teacherOutput:reply,teacherModel:'gemini',importance:scores.importance,quality:scores.quality,novelty:scores.novelty,
-        metadata:{difficulty:mystery.difficulty,target,revealedClue:revealClueKey||null,clueCount:found.length,psychologyPersistent:target!=='narrador',taskId:taskRow?.id||null}
+        teacherOutput:reply,teacherModel:'gemini-3.6-flash',importance:scores.importance,quality:scores.quality,novelty:scores.novelty,
+        metadata:{difficulty:mystery.difficulty,target,revealedClue:revealClueKey||null,clueCount:found.length,psychologyPersistent:target!=='narrador',playerSpecificRelationship:target!=='narrador',taskId:taskRow?.id||null}
       }).catch(()=>null as any);
       const jobs:Promise<unknown>[]=[];
       if(scores.importance>=55 || revealClueKey){
