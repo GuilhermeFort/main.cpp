@@ -9,19 +9,22 @@ if(start<0||end<0||end<=start) throw new Error('Bloco generate do Gemini não en
 
 const replacement=`async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const isLargeCase=!!(responseSchema as any)?.properties?.characters;
-  const tokenLimit=isLargeCase?Math.max(maxOutputTokens,26000):maxOutputTokens;
+  const tokenLimit=isLargeCase?20000:Math.max(maxOutputTokens,900);
 
-  async function call(limit:number){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),isLargeCase?48000:30000);
+  try{
     const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',{
       method:'POST',
       headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
-      signal:AbortSignal.timeout(isLargeCase?90000:55000),
+      signal:controller.signal,
       body:JSON.stringify({
         system_instruction:{parts:[{text:systemInstruction}]},
         contents:[{role:'user',parts:[{text:input}]}],
         generationConfig:{
-          maxOutputTokens:limit,
+          maxOutputTokens:tokenLimit,
           responseMimeType:'application/json',
+          thinkingConfig:{thinkingLevel:'MINIMAL'},
           ...(responseSchema?{responseSchema}:{}),
         }
       })
@@ -38,21 +41,21 @@ const replacement=`async function generate(apiKey:string,systemInstruction:strin
     const candidate=data?.candidates?.[0];
     const text=(candidate?.content?.parts||[]).map((part:any)=>part?.text||'').join('').trim();
     const finishReason=String(candidate?.finishReason||'');
-    return {text,finishReason};
-  }
+    if(!text) throw new Error('O Gemini devolveu uma resposta vazia.');
 
-  let result=await call(tokenLimit);
-  if(isLargeCase && (/MAX_TOKENS|LENGTH/i.test(result.finishReason)||(!result.text.endsWith('}')&&result.text.length>1000))){
-    console.warn('Gemini case truncated; retrying with larger output budget.',result.finishReason,result.text.length);
-    result=await call(Math.max(tokenLimit,36000));
-  }
-
-  if(!result.text) throw new Error('O Gemini devolveu uma resposta vazia.');
-  const cleaned=result.text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
-  try{return JSON.parse(cleaned)}catch{
-    console.error('Gemini JSON parse failure:',{finishReason:result.finishReason,length:cleaned.length,start:cleaned.slice(0,250),end:cleaned.slice(-250)});
-    if(isLargeCase) throw new Error('O Gemini cortou a geração do caso antes de terminar. Tente novamente.');
-    throw new Error('O Gemini respondeu, mas o JSON não pôde ser lido.');
+    const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
+    try{return JSON.parse(cleaned)}catch{
+      console.error('Gemini JSON parse failure:',{finishReason,length:cleaned.length,start:cleaned.slice(0,180),end:cleaned.slice(-180)});
+      if(/MAX_TOKENS|LENGTH/i.test(finishReason)||!cleaned.endsWith('}')){
+        throw new Error('A geração do caso foi cortada antes de terminar. Gere novamente.');
+      }
+      throw new Error('O Gemini respondeu, mas o JSON não pôde ser lido.');
+    }
+  }catch(error:any){
+    if(error?.name==='AbortError') throw new Error('O Gemini demorou demais para gerar o caso. Tente novamente.');
+    throw error;
+  }finally{
+    clearTimeout(timer);
   }
 }
 
@@ -64,9 +67,9 @@ src=src.replace(
   "const answerSchema={type:'OBJECT',required:['reply'],properties:{reply:{type:'STRING'},revealClueKey:{type:'STRING'}}};"
 );
 src=src.replace(
-  'Retorne {"reply":string,"revealClueKey":string|null}.',
-  'Retorne {"reply":string}. Inclua revealClueKey apenas quando uma pista real for legitimamente descoberta.'
+  'Retorne {\"reply\":string,\"revealClueKey\":string|null}.',
+  'Retorne {\"reply\":string}. Inclua revealClueKey apenas quando uma pista real for legitimamente descoberta.'
 );
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini 3.6 Flash: limite ampliado e retry automático para casos truncados.');
+console.log('Gemini 3.6 Flash: thinking MINIMAL, timeout seguro e JSON robusto.');
