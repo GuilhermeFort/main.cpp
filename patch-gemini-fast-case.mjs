@@ -37,6 +37,7 @@ const replacement=`  // O Gemini gera somente o núcleo narrativo. Mapa, disposi
 `;
 
 src=src.slice(0,start)+replacement+src.slice(end);
+src=src.replace("const suspects=mystery.characters?.filter(x=>x.kind==='suspect')||[], support=mystery.characters?.filter(x=>x.kind!=='suspect')||[], world=(mystery as any).world;","const suspects=(mystery.characters||[]).filter((x:any)=>x.kind==='suspect'), support=(mystery.characters||[]).filter((x:any)=>x.kind!=='suspect'), world=(mystery as any).world;");
 src=src.replace("specialist?7600:6500,caseSchema,.8","specialist?5600:4800,coreSchema,.8");
 fs.writeFileSync(file,src,'utf8');
 console.log('Gemini: núcleo compacto + mundo derivado no servidor aplicado.');
