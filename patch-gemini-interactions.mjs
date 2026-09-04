@@ -9,19 +9,21 @@ if(start<0||end<0||end<=start) throw new Error('Bloco generate do Gemini não en
 
 const replacement=`async function generate(apiKey:string,systemInstruction:string,input:string,maxOutputTokens:number,responseSchema?:object,_legacyTemperature?:number){
   const isLargeCase=!!(responseSchema as any)?.properties?.characters;
-  const tokenLimit=isLargeCase?18000:Math.max(maxOutputTokens,1200);
-  const attempts=isLargeCase?2:1;
+  // Caso grande precisa caber na janela curta da Function. Uma chamada compacta e rápida
+  // é mais confiável do que duas chamadas que somadas estouram maxDuration.
+  const tokenLimit=isLargeCase?10000:Math.max(maxOutputTokens,1200);
+  const attempts=isLargeCase?1:1;
   let lastError:any=null;
 
   for(let attempt=0;attempt<attempts;attempt++){
     const controller=new AbortController();
-    const timeoutMs=isLargeCase?(attempt===0?36000:16000):28000;
+    const timeoutMs=isLargeCase?50000:28000;
     const timer=setTimeout(()=>controller.abort(),timeoutMs);
     try{
-      const compactHint=attempt===0?'':'\\nIMPORTANTE: a resposta anterior não terminou. Refaça o MESMO tipo de caso de forma bem mais compacta, preservando todos os campos obrigatórios, quantidades e coerência.';
+      const compactHint=isLargeCase?'\\nRESPONDA DE FORMA COMPACTA. Preserve TODOS os campos obrigatórios, mas mantenha textos internos curtos para concluir o JSON dentro do tempo disponível. Não use markdown.':'';
       const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',{
         method:'POST',
-        headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},
+        headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json','X-Server-Timeout':'48'},
         signal:controller.signal,
         body:JSON.stringify({system_instruction:{parts:[{text:systemInstruction}]},contents:[{role:'user',parts:[{text:input+compactHint}]}],generationConfig:{maxOutputTokens:tokenLimit,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'MINIMAL'},...(responseSchema?{responseSchema}:{})}})
       });
@@ -30,8 +32,8 @@ const replacement=`async function generate(apiKey:string,systemInstruction:strin
       const candidate=data?.candidates?.[0];const text=(candidate?.content?.parts||[]).map((part:any)=>part?.text||'').join('').trim();const finishReason=String(candidate?.finishReason||'');
       if(!text)throw new Error('O Gemini devolveu uma resposta vazia.');
       const cleaned=text.replace(/^\\s*\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`\\s*$/,'').trim();
-      try{return JSON.parse(cleaned)}catch{const truncated=/MAX_TOKENS|LENGTH/i.test(finishReason)||(!cleaned.endsWith('}')&&!cleaned.endsWith(']'));console.error('Gemini JSON parse failure:',{attempt,finishReason,length:cleaned.length,start:cleaned.slice(0,160),end:cleaned.slice(-160)});if(truncated&&attempt+1<attempts){lastError=new Error('Resposta truncada');continue;}throw new Error(truncated?'A geração do caso foi cortada antes de terminar. Gere novamente.':'O Gemini respondeu, mas o JSON não pôde ser lido.');}
-    }catch(error:any){lastError=error;if(error?.name==='AbortError'&&attempt+1<attempts)continue;if(error?.name==='AbortError')throw new Error('O Gemini demorou demais para gerar o caso. Tente novamente.');throw error;}finally{clearTimeout(timer);}
+      try{return JSON.parse(cleaned)}catch{const truncated=/MAX_TOKENS|LENGTH/i.test(finishReason)||(!cleaned.endsWith('}')&&!cleaned.endsWith(']'));console.error('Gemini JSON parse failure:',{attempt,finishReason,length:cleaned.length,start:cleaned.slice(0,160),end:cleaned.slice(-160)});throw new Error(truncated?'A geração do caso foi cortada antes de terminar. Tente gerar novamente.':'O Gemini respondeu, mas o JSON não pôde ser lido.');}
+    }catch(error:any){lastError=error;if(error?.name==='AbortError')throw new Error('O Gemini demorou demais para gerar o caso. Tente novamente.');throw error;}finally{clearTimeout(timer);}
   }
   throw lastError||new Error('O Gemini não conseguiu concluir a geração.');
 }
@@ -52,17 +54,9 @@ if(fs.existsSync('lib/case.ts')){
   c=c.replace('export type WorldLocation={key:string;name:string;kind:string;description:string;x:number;y:number;knownInitially:boolean};','export type WorldLocation={key:string;name:string;kind:string;description:string;x:number;y:number;knownInitially:boolean;clueKeys?:string[]};');
   c=c.replace('export type WorldDevice={key:string;ownerCharacterId:string;type:string;label:string;description:string;knownInitially:boolean;requiresWarrant:boolean;artifacts:WorldArtifact[]};','export type WorldDevice={key:string;ownerCharacterId:string;type:string;label:string;description:string;locationKey?:string;knownInitially:boolean;requiresWarrant:boolean;revealedByClueKeys?:string[];artifacts:WorldArtifact[]};');
   c=c.replace('export type WorldCamera={key:string;name:string;locationKey:string;angleDescription:string;hasAudio:boolean;clockOffsetSeconds:number;quality:string;status:string;knownInitially:boolean;events:WorldCameraEvent[]};','export type WorldCamera={key:string;name:string;locationKey:string;angleDescription:string;hasAudio:boolean;clockOffsetSeconds:number;quality:string;status:string;knownInitially:boolean;revealedByClueKeys?:string[];events:WorldCameraEvent[]};');
-  const locationLinks={"knownInitially:true},\n    {key:'quarto-1209'":"knownInitially:true,clueKeys:['camera']},\n    {key:'quarto-1209'","knownInitially:true},\n    {key:'quarto-1207'":"knownInitially:true,clueKeys:['door','witness','drive']},\n    {key:'quarto-1207'","knownInitially:true},\n    {key:'recepcao'":"knownInitially:true,clueKeys:['call','door']},\n    {key:'recepcao'","knownInitially:true},\n    {key:'estacionamento'":"knownInitially:true,clueKeys:['camera','payment']},\n    {key:'estacionamento'"};
-  for(const [a,b] of Object.entries(locationLinks))c=c.replace(a,b);
-  c=c.replace("description:'Entrada e saída de hóspedes e visitantes.',x:18,y:78,knownInitially:true}","description:'Entrada e saída de hóspedes e visitantes.',x:18,y:78,knownInitially:true,clueKeys:[]}");
-  c=c.replace("description:'Aparelho pessoal de Rafael.',knownInitially:true,requiresWarrant:true","description:'Aparelho pessoal de Rafael.',locationKey:'quarto-1207',knownInitially:true,requiresWarrant:true,revealedByClueKeys:[]");
-  c=c.replace("description:'Estação usada para administrar câmeras e acessos.',knownInitially:true,requiresWarrant:false","description:'Estação usada para administrar câmeras e acessos.',locationKey:'recepcao',knownInitially:true,requiresWarrant:false,revealedByClueKeys:[]");
-  c=c.replace("description:'Dispositivo localizado na base de um abajur da suíte 1209.',knownInitially:false,requiresWarrant:false","description:'Dispositivo localizado na base de um abajur da suíte 1209.',locationKey:'quarto-1209',knownInitially:false,requiresWarrant:false,revealedByClueKeys:['drive']");
-  c=c.replace(/status:'online',knownInitially:true,events:\[/g,"status:'online',knownInitially:true,revealedByClueKeys:[],events:[");
   fs.writeFileSync('lib/case.ts',c,'utf8');
 }
 
-// Corrige a inferência de tipos do Set para payloads JSON dinâmicos da rota world-state.
 const worldRoute='app/api/world-state/route.ts';
 if(fs.existsSync(worldRoute)){
   let w=fs.readFileSync(worldRoute,'utf8');
@@ -75,4 +69,4 @@ for(const route of ['app/api/settings/route.ts','app/api/messages/route.ts']){
 }
 
 fs.writeFileSync(file,src,'utf8');
-console.log('Gemini 3.6 Flash: retry dentro de 60s, mundo ligado a pistas e JSON robusto.');
+console.log('Gemini 3.6 Flash: geração compacta em uma chamada, timeout de 50s e JSON robusto.');
